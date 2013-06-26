@@ -466,7 +466,6 @@ int HAMLIB_API rig_load_backend(const char *be_name)
 	snprintf (libname, sizeof (libname), PREFIX"%s", be_name);
 
 	be_handle = lt_dlopenext (libname);
-	be_handle = 0;
 
 	/*
 	 * external module not found? try dlopenself for backends
