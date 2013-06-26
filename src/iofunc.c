@@ -50,7 +50,9 @@
 
 #include "serial.h"
 #include "parallel.h"
+#ifndef BUILD_MONOLITHIC
 #include "usb_port.h"
+#endif
 #include "network.h"
 #include "cm108.h"
 
@@ -114,12 +116,13 @@ int HAMLIB_API port_open(hamlib_port_t *p)
 		p->fd = status;
 		break;
 
+#ifndef BUILD_MONOLITHIC
 	case RIG_PORT_USB:
 		status = usb_port_open(p);
 		if (status < 0)
 			return status;
 		break;
-
+#endif
 	case RIG_PORT_NONE:
 	case RIG_PORT_RPC:
 		break;	/* ez :) */
@@ -162,9 +165,11 @@ int HAMLIB_API port_close(hamlib_port_t *p, rig_port_t port_type)
 		case RIG_PORT_CM108:
 			ret = cm108_close(p);
 			break;
+#ifndef BUILD_MONOLITHIC
 		case RIG_PORT_USB:
 			ret = usb_port_close(p);
 			break;
+#endif
 		case RIG_PORT_NETWORK:
 		case RIG_PORT_UDP_NETWORK:
 			ret = network_close(p);

@@ -9,15 +9,19 @@ pkgconfig_DATA = hamlib.pc
 EXTRA_DIST = PLAN TODO LICENSE hamlib.m4 hamlib.pc.in README.developer \
 	README.betatester README.win32 Android.mk
 
-SUBDIRS =
 if BUILD_LIBLTDL
-SUBDIRS += libltdl
+  MAYBE_LIBLTDL = libltdl
 endif
-SUBDIRS += macros include lib src \
+
+if BUILD_TESTS
+  MAYBE_TESTS = tests
+endif
+
+SUBDIRS = $(MAYBE_LIBLTDL) macros include lib src \
 	@BACKEND_LIST@ \
 	@ROT_BACKEND_LIST@ \
 	@BINDINGS@ \
-	tests doc android
+	$(MAYBE_TESTS) doc android
 
 DIST_SUBDIRS = libltdl macros include lib src c++ bindings tests doc \
 	icom kenwood aor yaesu dummy pcr alinco uniden tentec kachina jrc \

@@ -629,6 +629,20 @@ AS_IF([test x"${LIBUSB_LIBS}" = x],
       ])
 AC_MSG_RESULT([$cf_with_libusb])
 
+AC_MSG_CHECKING([whether to build for fldigi static linking])
+AC_ARG_ENABLE([monolithic],
+    [AS_HELP_STRING([--enable-monolithic],
+                    [build fldigi monolithic static library @<:@default=no@:>@])],
+                    [cf_enable_monolithic=$enableval],
+                    [cf_enable_monolithic="no"])
+AC_MSG_RESULT([$cf_enable_monolithic])
+
+AS_IF([test x"${cf_enable_monolithic}" = "xyes"],
+      [AC_DEFINE([BUILD_MONOLITHIC], [1], [Define if monolithic static library required for fldigi build])
+      ])
+
+AM_CONDITIONAL([BUILD_TESTS], [test x"${cf_enable_monolithic}" != "xyes"])
+
 
 ## -------------------------------- ##
 ## Prepare rig backend dependencies ##
@@ -748,6 +762,8 @@ echo \
     With rigmem XML support         ${cf_with_xml_support}
     With included ltdl              ${with_included_ltdl}
     With Readline support           ${cf_with_readline_support}
+
+    Build for fldigi static linking ${cf_enable_monolithic}
 
     Enable HTML rig feature matrix  ${cf_enable_html_matrix}
     Enable WinRadio                 ${cf_with_winradio}

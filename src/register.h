@@ -32,6 +32,7 @@
 #endif
 
 #define CONCAT4(w__, x__, y__, z__) w__ ## x__ ## y__ ## z__
+
 #define MAKE_VERSIONED_FN(prefix__, version__, name_args__) CONCAT4(prefix__, version__, _, name_args__)
 /* void MAKE_VERSIONED_FN(foo, 42, bar(int i))  ->  void foo42_bar(int i) */
 
@@ -42,7 +43,9 @@
 #ifdef DECLARE_INITRIG_BACKEND
 #undef DECLARE_INITRIG_BACKEND
 #endif
-#define DECLARE_INITRIG_BACKEND(backend) EXTERN_C BACKEND_EXPORT(int) MAKE_VERSIONED_FN(initrigs, ABI_VERSION, backend(void *be_handle))
+
+#define DECLARE_INITRIG_BACKEND(backend) \
+EXTERN_C BACKEND_EXPORT(int) MAKE_VERSIONED_FN(initrigs, ABI_VERSION, backend(void *be_handle))
 
 #ifdef DECLARE_PROBERIG_BACKEND
 #undef DECLARE_PROBERIG_BACKEND

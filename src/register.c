@@ -42,6 +42,8 @@
 
 #include <hamlib/rig.h>
 
+#include "register.h"
+
 #ifndef PATH_MAX
 # define PATH_MAX       1024
 #endif
@@ -55,7 +57,7 @@
  * that is backend that were not known by Hamlib at compile time.
  * Maybe, riglist.h should reserve some numbers for them? --SF
  */
-static struct {
+struct {
 	int be_num;
 	const char *be_name;
 	rig_model_t (* be_probe_all)(hamlib_port_t*, rig_probe_func_t, rig_ptr_t);
@@ -71,6 +73,83 @@ struct rig_list {
 	struct rig_list *next;
 };
 
+/*----------------------------------------------------------------------
+ * This code supports globally registering each backend initializer
+ * function (see register.h)
+ *----------------------------------------------------------------------
+*/
+#ifdef BUILD_MONOLITHIC
+
+struct be_linked_list
+{
+	backend_type           *m_backend ;
+	char                    *m_name;
+	struct be_linked_list *m_next ;
+} be_list_dummy;
+
+static struct be_linked_list *backend_linked_list = NULL ;
+static int backend_linked_list_size = 0;
+static int backends_initialized = 0;
+
+void be_list_initialize_family( backend_type *func, char *name )
+{
+	struct be_linked_list *ptr = malloc( sizeof(be_list_dummy) );
+	ptr->m_next = backend_linked_list;
+	ptr->m_backend = func;
+	ptr->m_name = malloc(strlen(name) + 1);
+	strcpy(ptr->m_name, name);
+	backend_linked_list = ptr;
+
+// uncomment if you need to check for correct creation of linked list
+	printf("registering %s: me: %p, (%p)(), next %p\n",
+		ptr->m_name, ptr, ptr->m_backend, ptr->m_next);
+
+	backend_linked_list_size++;
+}
+
+#define INITIALIZE(rig) \
+extern int MAKE_VERSIONED_FN(initrigs, ABI_VERSION, rig(void *be_handle)); \
+	be_list_initialize_family(MAKE_VERSIONED_FN(initrigs, ABI_VERSION, rig), #rig);
+
+void init_backend_list()
+{
+// list of backends of interest to building fldigi
+	INITIALIZE(kenwood);
+	INITIALIZE(tentec);
+	INITIALIZE(yaesu);
+	INITIALIZE(adat);
+	INITIALIZE(alinco);
+	INITIALIZE(aor);
+	INITIALIZE(drake);
+	INITIALIZE(dummy);
+	INITIALIZE(flexradio);
+	INITIALIZE(icom);
+	INITIALIZE(jrc);
+	INITIALIZE(lowe);
+	INITIALIZE(pcr);
+	INITIALIZE(prm80);
+	INITIALIZE(racal);
+}
+
+void execute_link_list_initializers()
+{
+	if (backend_linked_list_size == 0) init_backend_list();
+
+	printf("%d initializers globally registered\n", backend_linked_list_size);
+	struct be_linked_list *p_be_linked_list = backend_linked_list;
+	while (p_be_linked_list != NULL) {
+		printf("Initializing %s using linked initializer list\n", p_be_linked_list->m_name);
+		(p_be_linked_list->m_backend)();
+		p_be_linked_list = p_be_linked_list->m_next;
+	}
+	backends_initialized = 1;
+	return;
+}
+
+#endif /* BUILD_MONOLITHIC */
+
+/*--------------------------------------------------------------------*/
+
 #define RIGLSTHASHSZ 16
 #define HASH_FUNC(a) ((a)%RIGLSTHASHSZ)
 
@@ -78,10 +157,9 @@ struct rig_list {
  * The rig_hash_table is a hash table pointing to a list of next==NULL
  * 	terminated caps.
  */
-static struct rig_list *rig_hash_table[RIGLSTHASHSZ] = { NULL, };
+static struct rig_list *rig_hash_table[RIGLSTHASHSZ];
 
-
-static int rig_lookup_backend(rig_model_t rig_model);
+int rig_lookup_backend(rig_model_t rig_model);
 
 /*
  * Basically, this is a hash insert function that doesn't check for dup!
@@ -94,22 +172,24 @@ int HAMLIB_API rig_register(const struct rig_caps *caps)
 	if (!caps)
 		return -RIG_EINVAL;
 
-	rig_debug(RIG_DEBUG_VERBOSE, "rig_register (%d)\n",caps->rig_model);
-
 #ifndef DONT_WANT_DUP_CHECK
 	if (rig_get_caps(caps->rig_model)!=NULL)
 		return -RIG_EINVAL;
 #endif
 
 	p = (struct rig_list*)malloc(sizeof(struct rig_list));
-	if (!p)
+	if (!p) {
+		rig_debug(RIG_DEBUG_VERBOSE, "rig register, failed to create struct rig_list*");
 		return -RIG_ENOMEM;
+	}
 
 	hval = HASH_FUNC(caps->rig_model);
 	p->caps = caps;
 	p->handle = NULL;
 	p->next = rig_hash_table[hval];
 	rig_hash_table[hval] = p;
+
+//printf("rig_register pointer to rig_has_table = %p\n", rig_hash_table);
 
 	return RIG_OK;
 }
@@ -136,8 +216,12 @@ const struct rig_caps * HAMLIB_API rig_get_caps(rig_model_t rig_model)
  * according to BACKEND_NUM
  * return -1 if not found.
  */
-static int rig_lookup_backend(rig_model_t rig_model)
+int rig_lookup_backend(rig_model_t rig_model)
 {
+#ifdef BUILD_MONOLITHIC
+//	if (backends_initialized == 0) execute_link_list_initializers();
+#endif
+
 	int i;
 
 	for (i=0; i<RIG_BACKEND_MAX && rig_backend_list[i].be_name; i++) {
@@ -157,6 +241,10 @@ static int rig_lookup_backend(rig_model_t rig_model)
  */
 int HAMLIB_API rig_check_backend(rig_model_t rig_model)
 {
+#ifdef BUILD_MONOLITHIC
+	if (backends_initialized == 0) execute_link_list_initializers();
+#endif
+
 	const struct rig_caps *caps;
 	int be_idx;
 	int retval;
@@ -214,22 +302,34 @@ int HAMLIB_API rig_unregister(rig_model_t rig_model)
  */
 int HAMLIB_API rig_list_foreach(int (*cfunc)(const struct rig_caps*, rig_ptr_t),rig_ptr_t data)
 {
+#ifdef BUILD_MONOLITHIC
+	if (backends_initialized == 0) execute_link_list_initializers();
+#endif
+
 	struct rig_list *p;
 	int i;
 
 	if (!cfunc)
 		return -RIG_EINVAL;
 
+	int j = 0;
+
 	for (i=0; i<RIGLSTHASHSZ; i++) {
-		for (p=rig_hash_table[i]; p; p=p->next)
+		for (p=rig_hash_table[i]; p; p=p->next) {
+			j++;
 			if ((*cfunc)(p->caps,data) == 0)
 				return RIG_OK;
+		}
 	}
+
+	rig_debug(RIG_DEBUG_VERBOSE, "rig_list_foreach :number entries in hash table %d\n", j);
+
+//printf("rig_list_foreach pointer to rig_has_table = %p\n",rig_hash_table);
 
 	return RIG_OK;
 }
 
-static int dummy_rig_probe(const hamlib_port_t *p, rig_model_t model, rig_ptr_t data)
+int dummy_rig_probe(const hamlib_port_t *p, rig_model_t model, rig_ptr_t data)
 {
 	rig_debug(RIG_DEBUG_TRACE, "Found rig, model %d\n", model);
 	return RIG_OK;
@@ -241,6 +341,10 @@ static int dummy_rig_probe(const hamlib_port_t *p, rig_model_t model, rig_ptr_t 
  */
 rig_model_t rig_probe_first(hamlib_port_t *p)
 {
+#ifdef BUILD_MONOLITHIC
+	if (backends_initialized == 0) execute_link_list_initializers();
+#endif
+
 	int i;
 	rig_model_t model;
 
@@ -261,6 +365,10 @@ rig_model_t rig_probe_first(hamlib_port_t *p)
  */
 int rig_probe_all_backends(hamlib_port_t *p, rig_probe_func_t cfunc, rig_ptr_t data)
 {
+#ifdef BUILD_MONOLITHIC
+	if (backends_initialized == 0) execute_link_list_initializers();
+#endif
+
 	int i;
 
 	for (i=0; i<RIG_BACKEND_MAX && rig_backend_list[i].be_name; i++) {
@@ -274,13 +382,23 @@ int rig_probe_all_backends(hamlib_port_t *p, rig_probe_func_t cfunc, rig_ptr_t d
 
 int rig_load_all_backends()
 {
+#ifdef BUILD_MONOLITHIC
+	if (backend_linked_list_size > 0) {
+		execute_link_list_initializers();
+		return RIG_OK;
+	}
+	return RIG_EINTERNAL;
+#else /* remove all ltdl calls */
 	int i;
-
-	for (i=0; i<RIG_BACKEND_MAX && rig_backend_list[i].be_name; i++) {
-			rig_load_backend(rig_backend_list[i].be_name);
+	for (i = 0; i < RIGLSTHASHSZ; i++) {
+		rig_hash_table[i] = NULL;
 	}
 
+	for (i=0; i<RIG_BACKEND_MAX && rig_backend_list[i].be_name; i++) {
+		rig_load_backend(rig_backend_list[i].be_name);
+	}
 	return RIG_OK;
+#endif /* remove all ltdl calls */
 }
 
 
@@ -291,9 +409,10 @@ typedef int (*backend_init_t)(rig_ptr_t);
  * rig_check_backend_version
  * Check that the versioned init function name for be_name is the correct version.
  */
-static int rig_check_backend_version(const lt_dlhandle be_handle, const char *be_name,
+int rig_check_backend_version(const lt_dlhandle be_handle, const char *be_name,
 						backend_init_t *be_init)
 {
+#ifndef BUILD_MONOLITHIC /* remove all ltdl calls */
 	char initfname[MAXFUNCNAMELEN];
 
 	snprintf(initfname, MAXFUNCNAMELEN, "initrigs%d_%s", ABI_VERSION, be_name);
@@ -303,7 +422,7 @@ static int rig_check_backend_version(const lt_dlhandle be_handle, const char *be
 					initfname, lt_dlerror());
 		return -RIG_EINVAL;
 	}
-
+#endif /* remove all ltdl calls */
 	return RIG_OK;
 }
 
@@ -313,6 +432,7 @@ static int rig_check_backend_version(const lt_dlhandle be_handle, const char *be
  */
 int HAMLIB_API rig_load_backend(const char *be_name)
 {
+#ifndef BUILD_MONOLITHIC /* remove all ltdl calls */
 # define PREFIX "hamlib-"
 
 	lt_dlhandle be_handle;
@@ -340,14 +460,13 @@ int HAMLIB_API rig_load_backend(const char *be_name)
 
 	lt_dladdsearchdir(HAMLIB_MODULE_DIR);
 
-	rig_debug(RIG_DEBUG_VERBOSE, "rig: loading backend %s\n",be_name);
-
 	/*
 	 * add hamlib directory here
 	 */
 	snprintf (libname, sizeof (libname), PREFIX"%s", be_name);
 
 	be_handle = lt_dlopenext (libname);
+	be_handle = 0;
 
 	/*
 	 * external module not found? try dlopenself for backends
@@ -358,6 +477,7 @@ int HAMLIB_API rig_load_backend(const char *be_name)
 						"trying static symbols...\n",
 						libname, lt_dlerror());
 		be_handle = lt_dlopen (NULL);
+
 		if (!be_handle || rig_check_backend_version(be_handle, be_name, &be_init) != RIG_OK) {
 			rig_debug(RIG_DEBUG_ERR, "rig:  lt_dlopen(\"%s\") failed (%s)\n",
 						libname, lt_dlerror());
@@ -383,6 +503,10 @@ int HAMLIB_API rig_load_backend(const char *be_name)
 
 	status = (*be_init)(be_handle);
 
+	rig_debug(RIG_DEBUG_VERBOSE, "rig: %s loaded\n",be_name);
+
  	return status;
+#endif /* remove all ltdl calls */
+	return RIG_OK;
 }
 
