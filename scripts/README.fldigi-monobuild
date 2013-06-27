@@ -1,0 +1,168 @@
+Several scripts have been contributed by Dave, W1HKJ, for building a
+monolithic static library for inclusion with Fldigi.  The resulting
+library only contains radio backends and omits the kachina, kit, and
+winradio backends.
+
+The scripts are:
+
+    makemono.sh		Build monolithic for Linux
+    makemono32.sh	Build monolithic for Windows using MinGW
+    make4mxe.sh		Builds Fldigi using MXE
+    hamlib.mk		MXE directive file
+
+
+From Dave these are the steps he took to use these scripts:
+
+This is probably not the easiest way to get from point A to point Z
+... but I did arrive.
+
+The following assumes that you have installed the latest mxe.cc (not
+the stable) and built it using "make -k" (takes forever).
+
+1.  Cloned the latest development branch of hamlib at github
+2.  Created a local w1hkj_test branch using
+  $ git checkout -b w1hkj_test origin/w1hkj_test
+3.  Applied the attached patch to this new local branch
+
+4.  cd up one directory and then created a copy of the hamlib.git (my
+clone name) directory, just for convenience in the later /opt/mxe
+build
+
+$ cp -r hamlib.git hamlib-1.2.15.3
+
+and a tarball of that directory
+
+$ tar czf hamlib-1.2.15.3.tar.gz hamlib-1.2.15.3
+
+which will be used for the /opt/mxe build
+
+5.  Copied the hamlib-1.2.15.3.tar.gz file to /opt/mxe/pkg
+
+6.  Obtained the sha1 checksum for the tarball
+
+$ openssl sha1 hamlib-1.2.15.3.tar.gz
+SHA1(hamlib-1.2.15.3.tar.gz)= d07a90687ba314e075b0088faeb1e7e9bb7f6337
+
+7.  Edited the attached hamlib.mk to reflect the correct checksum for
+my source tarball.
+
+8.  Copied hamlib.mk to /opt/mxe/src
+
+9.  Edited /opt/mxe/index.html to include these lines:
+
+<tr>
+<td id="hamlib-package">hamlib</td>
+<td id="hamlib-version">1.2.15.3</td>
+<td id="hamlib-website"><a href="http://hamlib.org/">Hamlib</a></td>
+</tr>
+
+10.  Built the "stock" hamlib library for the packaged hamlib-1.2.15.3
+
+$ cd /opt/mxe
+$ make hamlib
+
+That will build and install all of the .h, .a, .la, .lo files ... We
+will finally only need the .h and the final libhamlib.a file
+
+11.  cd'd back to the hamlib.git clone directory.  Check the scripts
+sub directory to be sure that "makemono32.sh" is present.  It will
+read as:
+
+   make clean
+   rm -f hamlib-win32.a
+
+   ./configure --prefix=${HOME}/hl-win32-static \
+                --build=i686-pc-linux-gnu --host=i686-pc-mingw32 \
+                --enable-static \
+                --without-c++-binding \
+                --disable-winradio \
+                --enable-monolithic
+
+   make
+
+   objects="\
+   adat/*.o alinco/*.o aor/*.o \
+   drake/*.o dummy/*.o \
+   flexradio/*.o \
+   icom/*.o \
+   jrc/*.o \
+   kenwood/*.o \
+   lib/*.o \
+   lowe/*.o \
+   pcr/*.o prm80/*.o \
+   racal/*.o \
+   tentec/*.o \
+   yaesu/*.o \
+   src/libhamlib_la-cal.o src/libhamlib_la-cm108.o \
+   src/libhamlib_la-conf.o src/libhamlib_la-debug.o \
+   src/libhamlib_la-event.o src/libhamlib_la-ext.o \
+   src/libhamlib_la-iofunc.o src/libhamlib_la-locator.o \
+   src/libhamlib_la-mem.o src/libhamlib_la-misc.o \
+   src/libhamlib_la-network.o src/libhamlib_la-parallel.o \
+   src/libhamlib_la-register.o src/libhamlib_la-rig.o \
+   src/libhamlib_la-serial.o src/libhamlib_la-settings.o \
+   src/libhamlib_la-tones.o \
+   "
+   echo $objects
+
+   i686-pc-mingw32-ar crvs hamlib-win32.a $objects
+   i686-pc-mingw32-ranlib hamlib-win32.a
+   i686-pc-mingw32-strip hamlib-win32.a
+
+   mkdir -p ${HOME}/hl-win32-static/lib/
+
+   cp hamlib-win32.a ${HOME}/hl-win32-static/lib/libhamlib.a
+   ls ${HOME}/hl-win32-static/lib/libhamlib.a -l
+
+   cp hamlib-win32.a /opt/mxe/usr/i686-pc-mingw32/lib/libhamlib.a
+   ls /opt/mxe/usr/i686-pc-mingw32/lib/libhamlib.a -l
+
+12.  Executed that script
+
+$ scripts/makemono32.sh
+
+When done it will have replaced the
+/opt/mxe/usr/i686-pc-mingw32/lib/libhamlib.a with the monolithic
+library.  It will also create a new directory in your $HOME directory
+
+~/hl-win32-static/lib
+
+and populate it with a copy of libhamlib.a
+
+13.  You can then build fldigi for win32 static.  I've also attached
+the script that I use for this.
+
+After stripping it's about 12 Mg
+
+$ /opt/mxe/usr/bin/i686-pc-mingw32-strip fldigi.exe
+$ ls fldigi.exe -l
+-rwxr-xr-x 1 dave dave 12176398 Jun 26 15:08 fldigi.exe
+
+The installation file which includes for fldigi.exe and flarq.exe:
+
+-rw-r--r-- 1 dave dave 4627093 Jun 26 15:19 fldigi-3.21.72_setup.exe
+
+I've only test using wine on Linux.  I'll be testing the exe on both
+XP and Win8.  I can upload a copy of the exe if someone wants to just
+test the executable.  I'm interested to know if it works OK on Win7.
+
+------------------------------------------------
+Creating a static lib on OS X should be much simpler :-!
+
+73, Dave
+
+
+Dave notes that his ~/.bashrc includes these lines:
+
+includes these lines
+
+export PREFIX="/opt/mxe/usr"
+export CROSSCFG="--build=i686-pc-linux-gnu --host=i686-pc-mingw32"
+export LINKCFG="--enable-static --disable-shared"
+export PKGCFG="PKG_CONFIG=/opt/mxe/usr/bin/i686-pc-mingw32-pkg-config"
+
+export PATH=$HOME/bin:/opt/mxe/usr/bin/:$PATH
+
+You may need to adjust for your system.
+
+Dave
