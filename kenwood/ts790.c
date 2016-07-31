@@ -284,7 +284,25 @@ int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
     return -RIG_EINVAL;
 
   char cmdbuf[6];
-
+  vfo_t curvfo;
+  
+  //get current VFO or main/sub
+  switch (vfo) {
+    case RIG_VFO_A:
+    case RIG_VFO_B:
+      kenwood_ts790_get_vfo(rig, &curvfo);
+      break;
+      
+    case RIG_VFO_MAIN:
+    case RIG_VFO_SUB:
+      kenwood_ts790_get_main_sub(rig, &curvfo);
+  }
+  
+  if (vfo == curvfo)
+    rig_debug(RIG_DEBUG_VERBOSE, "%s: VFO (%s) matches current VFO %s; doing nothing\n", __func__, vfo, curvfo);
+    return RIG_OK;
+  
+  //Set up changes
   switch (vfo) {
   case RIG_VFO_A:
     sprintf(cmdbuf, "FN0");
