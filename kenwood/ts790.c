@@ -37,7 +37,7 @@
 
 #define TS790_LEVEL_ALL (RIG_LEVEL_STRENGTH)
 
-#define TS790_VFO (RIG_VFO_A|RIG_VFO_B)
+#define TS790_VFO (RIG_VFO_A|RIG_VFO_B|RIG_VFO_MAIN|RIG_VFO_SUB)
 
 #define TS790_VFO_OP (RIG_OP_UP|RIG_OP_DOWN)
 
@@ -55,6 +55,9 @@
 /*
  * Function definitions below
  */
+
+int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo);
+
 
 static struct kenwood_priv_caps  ts790_priv_caps  = {
 		.cmdtrm =  EOM_KEN,
@@ -187,7 +190,7 @@ const struct rig_caps ts790_caps = {
 .get_rit =  kenwood_get_rit,
 .set_mode =  kenwood_set_mode,
 .get_mode =  kenwood_get_mode_if,
-.set_vfo =  kenwood_set_vfo,
+.set_vfo =  kenwood_ts790_set_vfo,
 .get_vfo =  kenwood_get_vfo_if,
 .set_split_vfo =  kenwood_set_split_vfo,
 .get_split_vfo =  kenwood_get_split_vfo_if,
@@ -212,4 +215,50 @@ const struct rig_caps ts790_caps = {
 
 };
 
+
+
+
+/* DC/FN
+ *  Uses DC to set Main/Sub Destination, or FN to set 
+ *  VFO A or VFO B.
+ *
+ */
+int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
+{
+  rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
+
+  if (!rig)
+    return -RIG_EINVAL;
+
+  struct kenwood_priv_data *priv = rig->state.priv;
+  char cmdbuf[6];
+  int retval;
+
+  switch (vfo) {
+  case RIG_VFO_A:
+    sprintf(cmdbuf, "FN0");
+    break;
+
+  case RIG_VFO_B:
+    sprintf(cmdbuf, "FN1");
+    break;
+
+  case RIG_VFO_MAIN:
+    sprintf(cmdbuf, "DC0");
+    break;
+
+  case RIG_VFO_SUB:
+    sprintf(cmdbuf, "DC1");
+    break;
+    
+  case RIG_VFO_CURR:
+    return RIG_OK;
+
+  default:
+    rig_debug(RIG_DEBUG_ERR, "%s: unsupported VFO %d\n", __func__, vfo);
+    return -RIG_EINVAL;
+  }
+
+  return kenwood_transaction(rig, cmdbuf, NULL, 0);
+}
 
