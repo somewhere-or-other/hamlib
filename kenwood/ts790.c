@@ -304,28 +304,28 @@ int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
   
   //Set up changes
   switch (vfo) {
-  case RIG_VFO_A:
-    sprintf(cmdbuf, "FN0");
-    break;
+    case RIG_VFO_A:
+      sprintf(cmdbuf, "FN0");
+      break;
 
-  case RIG_VFO_B:
-    sprintf(cmdbuf, "FN1");
-    break;
+    case RIG_VFO_B:
+      sprintf(cmdbuf, "FN1");
+      break;
 
-  case RIG_VFO_MAIN:
-    sprintf(cmdbuf, "DC0");
-    break;
+    case RIG_VFO_MAIN:
+      sprintf(cmdbuf, "DC0");
+      break;
 
-  case RIG_VFO_SUB:
-    sprintf(cmdbuf, "DC1");
-    break;
-    
-  case RIG_VFO_CURR:
-    return RIG_OK;
+    case RIG_VFO_SUB:
+      sprintf(cmdbuf, "DC1");
+      break;
+      
+    case RIG_VFO_CURR:
+      return RIG_OK;
 
-  default:
-    rig_debug(RIG_DEBUG_ERR, "%s: unsupported VFO %d\n", __func__, vfo);
-    return -RIG_EINVAL;
+    default:
+      rig_debug(RIG_DEBUG_ERR, "%s: unsupported VFO %d\n", __func__, vfo);
+      return -RIG_EINVAL;
   }
 
   return kenwood_transaction(rig, cmdbuf, NULL, 0);
