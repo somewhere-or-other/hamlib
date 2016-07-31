@@ -57,6 +57,9 @@
  */
 
 int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo);
+int kenwood_ts790_get_main_sub(RIG *rig, vfo_t * vfo);
+int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo);
+
 
 
 static struct kenwood_priv_caps  ts790_priv_caps  = {
@@ -191,7 +194,7 @@ const struct rig_caps ts790_caps = {
 .set_mode =  kenwood_set_mode,
 .get_mode =  kenwood_get_mode_if,
 .set_vfo =  kenwood_ts790_set_vfo,
-.get_vfo =  kenwood_get_vfo_if,
+.get_vfo =  kenwood_ts790_get_vfo,
 .set_split_vfo =  kenwood_set_split_vfo,
 .get_split_vfo =  kenwood_get_split_vfo_if,
 .set_ctcss_tone =  kenwood_set_ctcss_tone,
@@ -216,6 +219,56 @@ const struct rig_caps ts790_caps = {
 };
 
 
+/* DC
+ *  Uses DC to query main/sub, and return
+ * 
+ */
+int kenwood_ts790_get_main_sub(RIG *rig, vfo_t * vfo)
+{
+  rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
+
+
+  char buf[3];
+  int rc;
+  
+  if (!rig || !vfo)
+    return -RIG_EINVAL;
+  
+    if (RIG_OK == (rc = kenwood_safe_transaction(rig, "DC", buf, sizeof (buf), 3)))
+    {
+      *vfo = buf[2] == '1' ? RIG_VFO_SUB : RIG_VFO_MAIN;
+    }
+  return rc;
+
+  
+}
+
+/* FN
+ *  Uses FN to query main/sub, and return
+ * 
+ */
+int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo)
+{
+  rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
+
+
+  char buf[3];
+  int rc;
+  
+  if (!rig || !vfo)
+    return -RIG_EINVAL;
+  
+    if (RIG_OK == (rc = kenwood_safe_transaction(rig, "FN", buf, sizeof (buf), 3)))
+    {
+      *vfo = buf[2] == '1' ? RIG_VFO_B : RIG_VFO_A;
+    }
+  return rc;
+
+  
+}
+
+
+
 
 
 /* DC/FN
@@ -230,9 +283,7 @@ int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
   if (!rig)
     return -RIG_EINVAL;
 
-  struct kenwood_priv_data *priv = rig->state.priv;
   char cmdbuf[6];
-  int retval;
 
   switch (vfo) {
   case RIG_VFO_A:
