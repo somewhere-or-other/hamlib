@@ -58,7 +58,7 @@
 
 int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo);
 int kenwood_ts790_get_main_sub(RIG *rig, vfo_t * vfo);
-int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo);
+// int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo);
 
 
 
@@ -194,7 +194,8 @@ const struct rig_caps ts790_caps = {
 .set_mode =  kenwood_set_mode,
 .get_mode =  kenwood_get_mode_if,
 .set_vfo =  kenwood_ts790_set_vfo,
-.get_vfo =  kenwood_ts790_get_vfo,
+.get_vfo =  kenwood_get_vfo_if,
+// .get_vfo = kenwood_ts790_get_main_sub,
 .set_split_vfo =  kenwood_set_split_vfo,
 .get_split_vfo =  kenwood_get_split_vfo_if,
 .set_ctcss_tone =  kenwood_set_ctcss_tone,
@@ -228,44 +229,47 @@ int kenwood_ts790_get_main_sub(RIG *rig, vfo_t * vfo)
   rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
 
 
-  char buf[3];
+  char buf[4];
   int rc;
   
   if (!rig || !vfo)
     return -RIG_EINVAL;
+
+  rig_debug(RIG_DEBUG_VERBOSE, "%s: about to begin transaction\n", __func__);
   
-    if (RIG_OK == (rc = kenwood_safe_transaction(rig, "DC", buf, sizeof (buf), 3)))
-    {
-      *vfo = buf[2] == '1' ? RIG_VFO_SUB : RIG_VFO_MAIN;
-    }
+  if (RIG_OK == (rc = kenwood_safe_transaction(rig, "DC", buf, sizeof (buf), 3)))
+  {
+      *vfo = buf[2] == '1' ? RIG_VFO_SUB : RIG_VFO_MAIN;      
+  }
   return rc;
 
   
 }
 
-/* FN
- *  Uses FN to query main/sub, and return
- * 
- */
-int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo)
-{
-  rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
-
-
-  char buf[3];
-  int rc;
-  
-  if (!rig || !vfo)
-    return -RIG_EINVAL;
-  
-    if (RIG_OK == (rc = kenwood_safe_transaction(rig, "FN", buf, sizeof (buf), 3)))
-    {
-      *vfo = buf[2] == '1' ? RIG_VFO_B : RIG_VFO_A;
-    }
-  return rc;
-
-  
-}
+// TURNS OUT THAT FN DOESNT RETURN ANYTHING, AND THIS DOESN'T WORK ON THE 790!!
+// /* FN
+//  *  Uses FN to query main/sub, and return
+//  * 
+//  */
+// int kenwood_ts790_get_vfo(RIG *rig, vfo_t * vfo)
+// {
+//   rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __func__);
+// 
+// 
+//   char buf[3];
+//   int rc;
+//   
+//   if (!rig || !vfo)
+//     return -RIG_EINVAL;
+//   
+//     if (RIG_OK == (rc = kenwood_safe_transaction(rig, "FN", buf, sizeof (buf), 3)))
+//     {
+//       *vfo = buf[2] == '1' ? RIG_VFO_B : RIG_VFO_A;
+//     }
+//   return rc;
+// 
+//   
+// }
 
 
 
@@ -290,7 +294,9 @@ int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
   switch (vfo) {
     case RIG_VFO_A:
     case RIG_VFO_B:
-      kenwood_ts790_get_vfo(rig, &curvfo);
+//       kenwood_ts790_get_vfo(rig, &curvfo);
+      kenwood_get_vfo_if(rig, &curvfo);
+
       break;
       
     case RIG_VFO_MAIN:
@@ -298,9 +304,10 @@ int kenwood_ts790_set_vfo(RIG *rig, vfo_t vfo)
       kenwood_ts790_get_main_sub(rig, &curvfo);
   }
   
-  if (vfo == curvfo)
+  if (vfo == curvfo) {
     rig_debug(RIG_DEBUG_VERBOSE, "%s: VFO (%s) matches current VFO %s; doing nothing\n", __func__, vfo, curvfo);
     return RIG_OK;
+  } 
   
   //Set up changes
   switch (vfo) {
